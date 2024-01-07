@@ -74,10 +74,10 @@ static class Parser
 			do
 			{
 				int semicolonIndex = MemoryMarshal.CreateSpan(ref current, (int)Unsafe.ByteOffset(ref current, ref windowEnd)).IndexOf((byte)';');
+				ref var itemData = ref CollectionsMarshal.GetValueRefOrAddDefault(aggregates, new Utf8StringRef((byte*)Unsafe.AsPointer(ref current), semicolonIndex), out bool exists);
 				ref byte numberStart = ref Unsafe.Add(ref current, semicolonIndex + 1);
 				int rowEndIndex = MemoryMarshal.CreateSpan(ref numberStart, (int)Unsafe.ByteOffset(ref numberStart, ref windowEnd)).IndexOf((byte)'\n');
-				int value = ParseFixedPoint(MemoryMarshal.CreateSpan(ref numberStart, rowEndIndex));
-				ref var itemData = ref CollectionsMarshal.GetValueRefOrAddDefault(aggregates, new Utf8StringRef((byte*)Unsafe.AsPointer(ref current), semicolonIndex), out bool exists);
+				int value = ParseFixedPoint(ref numberStart, ref Unsafe.Add(ref numberStart, rowEndIndex));
 				current = ref Unsafe.Add(ref numberStart, rowEndIndex + 1);
 
 				if (!exists)
@@ -100,14 +100,23 @@ static class Parser
 		}
 	}
 
-	// Hacky parsing that expects a dot to always be present.
-	// If not, it will fail terribly.
-	private static int ParseFixedPoint(Span<byte> data)
+	// Hacky parsing that will do no validation.
+	private static int ParseFixedPoint(ref byte start, ref byte end)
 	{
-		int dotIndex = data.IndexOf((byte)'.');
-		int.TryParse(MemoryMarshal.CreateSpan(ref MemoryMarshal.GetReference(data), dotIndex), CultureInfo.InvariantCulture, out int r);
-		int decimalDigit = Unsafe.Add(ref MemoryMarshal.GetReference(data), dotIndex + 1) - '0';
-		return r * 10 + (r >= 0 ? decimalDigit : -decimalDigit);
+		bool isNegative = start == (byte)'-';
+		ref byte current = ref isNegative ? ref Unsafe.Add(ref start, 1) : ref start;
+		end = ref (end == '\r' ? ref Unsafe.Subtract(ref end, 1) : ref end);
+		int value = current - '0';
+		current = ref Unsafe.Add(ref current, 1);
+
+		while (!Unsafe.IsAddressGreaterThan(ref current, ref end))
+		{
+			int c = current - '0';
+			value = c >= 0 ? 10 * value + c : value;
+			current = ref Unsafe.Add(ref current, 1);
+		}
+
+		return isNegative ? -value : value;
 	}
 
 	public static string FormatFixedPoint(int value)
