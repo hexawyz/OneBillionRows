@@ -80,19 +80,13 @@ static class Parser
 				int value = ParseFixedPoint(ref numberStart, ref Unsafe.Add(ref numberStart, rowEndIndex));
 				current = ref Unsafe.Add(ref numberStart, rowEndIndex + 1);
 
-				if (!exists)
+				if (exists)
 				{
-					itemData.Min = value;
-					itemData.Max = value;
-					itemData.Sum = value;
-					itemData.Count = 1;
+					itemData.Aggregate(value);
 				}
 				else
 				{
-					itemData.Min = Math.Min(itemData.Min, value);
-					itemData.Max = Math.Max(itemData.Max, value);
-					itemData.Sum += value;
-					itemData.Count++;
+					itemData = new(value);
 				}
 
 			}
@@ -322,6 +316,22 @@ struct ItemData
 	public int Max;
 	public int Sum;
 	public int Count;
+
+	public ItemData(int value)
+	{
+		Min = value;
+		Max = value;
+		Sum = value;
+		Count = 1;
+	}
+
+	public void Aggregate(int value)
+	{
+		Min = Math.Min(Min, value);
+		Max = Math.Max(Max, value);
+		Sum += value;
+		Count++;
+	}
 
 	public void Aggregate(ItemData other)
 	{
